@@ -1,4 +1,4 @@
-# Arduino Mega 2560 RPN Scientific Calculator
+# Arduino Mega 2560 RPN Scientific Calculator(328p内存不足,无法胜任科学计算)
 
 基于 `Arduino Mega 2560` 的 `RPN` 科学计算器项目，目标是使用 Arduino 生态实现一套可落地、可维护、具备工业化组织方式的嵌入式计算器方案。
 
