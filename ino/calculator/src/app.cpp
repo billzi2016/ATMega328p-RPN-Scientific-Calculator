@@ -3,7 +3,7 @@
  * 文件作用：实现应用层主状态机。
  * 设计意图：
  * 1. 把输入事件、计算逻辑、界面刷新、存储记录统一收敛到一个调度层。
- * 2. 负责把各个可见界面和基础计算链路组织成可运行的最小系统。
+ * 2. 提供可以直接操作的最小完整计算器链路，而不是只保留框架。
  */
 
 #include "../include/app.h"
@@ -22,6 +22,7 @@ void App::begin() {
   core_.begin();
   storage_.begin();
   clearInput();
+  history_view_offset_ = 0;
   renderCurrentScreen();
 }
 
@@ -38,7 +39,6 @@ void App::update() {
 }
 
 void App::handleKeyEvent(const KeyEvent& event) {
-  // 目前仅处理按下事件，避免一次按键被重复消费。
   if (!event.pressed) {
     return;
   }
@@ -65,6 +65,24 @@ void App::handleKeyEvent(const KeyEvent& event) {
     case AppScreen::kHistory:
       if (event.code == KeyCode::kBack || event.code == KeyCode::kHist) {
         screen_ = AppScreen::kHome;
+      } else if (event.code == KeyCode::kUp) {
+        // 历史界面翻页时不使用 RAM 缓存，直接试探性读取 SD 中更早的一条。
+        uint16_t step = 0;
+        char expression[kHistoryExpressionSize] = {};
+        char result[kHistoryResultSize] = {};
+        uint8_t available_count = 0;
+        if (storage_.readRecentRecord(
+                static_cast<uint8_t>(history_view_offset_ + 1),
+                &step,
+                expression,
+                sizeof(expression),
+                result,
+                sizeof(result),
+                &available_count)) {
+          ++history_view_offset_;
+        }
+      } else if (event.code == KeyCode::kDel && history_view_offset_ > 0) {
+        --history_view_offset_;
       }
       break;
     case AppScreen::kFileBrowser:
@@ -88,6 +106,7 @@ void App::handleHomeKey(KeyCode code) {
     case KeyCode::k8: appendInputChar('8'); break;
     case KeyCode::k9: appendInputChar('9'); break;
     case KeyCode::kDot: appendInputChar('.'); break;
+    case KeyCode::kExp: appendInputChar('e'); break;
     case KeyCode::kDel:
       if (input_length_ > 0) {
         --input_length_;
@@ -100,6 +119,11 @@ void App::handleHomeKey(KeyCode code) {
       } else {
         core_.enter();
         logResult("ENTER DUP");
+      }
+      break;
+    case KeyCode::kEqual:
+      if (commitInputIfNeeded()) {
+        logResult("=");
       }
       break;
     case KeyCode::kPlus:
@@ -131,8 +155,112 @@ void App::handleHomeKey(KeyCode code) {
     case KeyCode::kDup:
       core_.dup();
       break;
+    case KeyCode::kRollUp:
+      core_.rollUp();
+      break;
+    case KeyCode::kRollDown:
+      core_.rollDown();
+      break;
+    case KeyCode::kSto:
+      commitInputIfNeeded();
+      core_.store();
+      logResult("STO");
+      break;
+    case KeyCode::kRcl:
+      if (core_.recall()) {
+        logResult("RCL");
+      }
+      break;
+    case KeyCode::kMc:
+      core_.memoryClear();
+      break;
+    case KeyCode::kMr:
+      if (core_.push(core_.memory())) {
+        logResult("MR");
+      }
+      break;
+    case KeyCode::kMPlus:
+      commitInputIfNeeded();
+      core_.memoryAdd();
+      break;
+    case KeyCode::kMMinus:
+      commitInputIfNeeded();
+      core_.memorySubtract();
+      break;
+    case KeyCode::kSin:
+      commitInputIfNeeded();
+      performUnaryOperation(core_.trigSin(angle_mode_), "SIN");
+      break;
+    case KeyCode::kCos:
+      commitInputIfNeeded();
+      performUnaryOperation(core_.trigCos(angle_mode_), "COS");
+      break;
+    case KeyCode::kTan:
+      commitInputIfNeeded();
+      performUnaryOperation(core_.trigTan(angle_mode_), "TAN");
+      break;
+    case KeyCode::kLn:
+      commitInputIfNeeded();
+      performUnaryOperation(core_.naturalLog(), "LN");
+      break;
+    case KeyCode::kLog:
+      commitInputIfNeeded();
+      performUnaryOperation(core_.commonLog(), "LOG");
+      break;
+    case KeyCode::kSqrt:
+      commitInputIfNeeded();
+      performUnaryOperation(core_.squareRoot(), "SQRT");
+      break;
+    case KeyCode::kSquare:
+      commitInputIfNeeded();
+      performUnaryOperation(core_.square(), "X^2");
+      break;
+    case KeyCode::kReciprocal:
+      commitInputIfNeeded();
+      performUnaryOperation(core_.reciprocal(), "1/X");
+      break;
+    case KeyCode::kPercent:
+      commitInputIfNeeded();
+      performUnaryOperation(core_.percent(), "%");
+      break;
+    case KeyCode::kPowXY:
+      commitInputIfNeeded();
+      performUnaryOperation(core_.power(), "X^Y");
+      break;
+    case KeyCode::kPi:
+      if (core_.pushPi()) {
+        logResult("PI");
+      }
+      break;
+    case KeyCode::kE:
+      if (core_.pushE()) {
+        logResult("E");
+      }
+      break;
+    case KeyCode::kAns:
+      if (strlen(last_result_) != 0) {
+        core_.push(atof(last_result_));
+        logResult("ANS");
+      }
+      break;
+    case KeyCode::kEng:
+      number_base_ = NumberBase::kDec;
+      break;
+    case KeyCode::kDeg:
+      angle_mode_ = AngleMode::kDeg;
+      break;
+    case KeyCode::kRad:
+      angle_mode_ = AngleMode::kRad;
+      break;
+    case KeyCode::kBin:
+      number_base_ = NumberBase::kBin;
+      break;
+    case KeyCode::kHex:
+      number_base_ = NumberBase::kHex;
+      break;
     case KeyCode::kHist:
       screen_ = AppScreen::kHistory;
+      history_view_offset_ = 0;
       break;
     case KeyCode::kFile:
       screen_ = AppScreen::kFileBrowser;
@@ -167,7 +295,7 @@ void App::renderCurrentScreen() {
   strncpy(model.input_line, input_buffer_, sizeof(model.input_line) - 1);
 
   char top_buffer[kFormatBufferSize];
-  core_.formatTop(top_buffer, sizeof(top_buffer));
+  core_.formatValue(core_.top(), number_base_, top_buffer, sizeof(top_buffer));
   snprintf(model.result_line, sizeof(model.result_line), "X=%s", top_buffer);
 
   buildStatusText(model.status_line, sizeof(model.status_line));
@@ -184,25 +312,33 @@ void App::renderMenuScreen() {
       "ANG:%s BASE:%s",
       angle_mode_ == AngleMode::kDeg ? "DEG" : "RAD",
       number_base_ == NumberBase::kBin ? "BIN" : (number_base_ == NumberBase::kHex ? "HEX" : "DEC"));
-  snprintf(
-      line2,
-      sizeof(line2),
-      "SD:%s BK:EXIT",
-      storage_.available() ? "OK" : "ERR");
+  snprintf(line2, sizeof(line2), "SD:%s BK:EXIT", storage_.available() ? "OK" : "ERR");
   display_.showMessage(line1, line2);
 }
 
 void App::renderHistoryScreen() {
+  // 历史界面始终直接读取 SD 会话文件，而不是依赖内存中的多条历史缓存。
+  uint16_t step = 0;
   char line1[kDisplayColumns + 1] = {};
   char line2[kDisplayColumns + 1] = {};
+  char expression[kHistoryExpressionSize] = {};
+  char result[kHistoryResultSize] = {};
+  uint8_t available_count = 0;
 
-  if (step_counter_ == 0) {
+  if (!storage_.readRecentRecord(
+          history_view_offset_,
+          &step,
+          expression,
+          sizeof(expression),
+          result,
+          sizeof(result),
+          &available_count)) {
     display_.showMessage(F("NO HISTORY"), F("BK:HOME"));
     return;
   }
 
-  snprintf(line1, sizeof(line1), "STEP:%u %s", step_counter_, last_expression_);
-  snprintf(line2, sizeof(line2), "RES:%s", last_result_);
+  snprintf(line1, sizeof(line1), "S:%u %s", step, expression);
+  snprintf(line2, sizeof(line2), "R:%s %u/%u", result, history_view_offset_ + 1, available_count);
   display_.showMessage(line1, line2);
 }
 
@@ -220,8 +356,8 @@ void App::renderFileScreen() {
     return;
   }
 
-  snprintf(line1, sizeof(line1), "LOG FILE");
-  snprintf(line2, sizeof(line2), "%s", storage_.sessionPath());
+  strncpy(line1, "LOG FILE", sizeof(line1) - 1);
+  strncpy(line2, storage_.sessionPath(), sizeof(line2) - 1);
   display_.showMessage(line1, line2);
 }
 
@@ -252,35 +388,41 @@ bool App::commitInputIfNeeded() {
 void App::performBinaryOperation(BinaryOp op, const char* expression_text) {
   commitInputIfNeeded();
   if (core_.applyBinary(op)) {
-    setLastExpression(expression_text);
     logResult(expression_text);
   }
 }
 
-void App::logResult(const char* expression_text) {
-  if (!storage_.available()) {
+void App::performUnaryOperation(bool succeeded, const char* expression_text) {
+  if (!succeeded) {
     return;
   }
+  logResult(expression_text);
+}
 
+void App::logResult(const char* expression_text) {
   char result_text[kResultBufferSize];
-  core_.formatTop(result_text, sizeof(result_text));
+  core_.formatValue(core_.top(), NumberBase::kDec, result_text, sizeof(result_text));
   strncpy(last_result_, result_text, sizeof(last_result_) - 1);
   last_result_[sizeof(last_result_) - 1] = '\0';
-  setLastExpression(expression_text);
 
-  HistoryRecord record = {};
-  record.step = ++step_counter_;
-  record.expression = expression_text;
-  record.result = result_text;
+  const uint16_t step = ++step_counter_;
 
-  if (!storage_.appendRecord(record)) {
-    // 存储失败时保持计算链路继续工作，由状态栏反映 SD 状态。
+  if (storage_.available()) {
+    HistoryRecord record = {};
+    record.step = step;
+    record.expression = expression_text;
+    record.result = result_text;
+
+    if (!storage_.appendRecord(record)) {
+      // 存储失败时保持计算链路继续工作，由状态栏反映 SD 状态。
+    }
   }
 }
 
 void App::buildStatusText(char* out_text, size_t length) const {
   const char* angle_text = angle_mode_ == AngleMode::kDeg ? "DEG" : "RAD";
   const char* base_text = "DEC";
+  const char* error_text = diagnostics_.errorText(core_.last_error());
 
   switch (number_base_) {
     case NumberBase::kDec:
@@ -297,20 +439,10 @@ void App::buildStatusText(char* out_text, size_t length) const {
   snprintf(
       out_text,
       length,
-      "%s %s SD:%s",
+      "%s %s %s",
       angle_text,
       base_text,
-      storage_.available() ? "OK" : "ERR");
-}
-
-void App::setLastExpression(const char* expression_text) {
-  if (expression_text == nullptr) {
-    last_expression_[0] = '\0';
-    return;
-  }
-
-  strncpy(last_expression_, expression_text, sizeof(last_expression_) - 1);
-  last_expression_[sizeof(last_expression_) - 1] = '\0';
+      core_.last_error() == ErrorCode::kNone ? (storage_.available() ? "SD:OK" : "SD:ER") : error_text);
 }
 
 }  // namespace calculator

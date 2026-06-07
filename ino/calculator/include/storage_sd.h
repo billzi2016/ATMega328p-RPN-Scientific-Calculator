@@ -19,12 +19,50 @@ namespace calculator {
 
 class StorageSd {
  public:
+  /*
+   * 函数作用：初始化 SD 模块与历史目录管理器。
+   */
   void begin();
+
+  /*
+   * 函数作用：返回 SD 当前是否可用。
+   */
   bool available() const;
+
+  /*
+   * 函数作用：确保本次会话日志文件已经创建并打开。
+   */
   bool ensureSessionFile();
+
+  /*
+   * 函数作用：向当前会话文件追加一条历史记录。
+   */
   bool appendRecord(const HistoryRecord& record);
+
+  /*
+   * 函数作用：返回本次会话日志文件是否已经真正创建。
+   */
   bool sessionOpened() const;
+
+  /*
+   * 函数作用：返回当前会话日志文件路径。
+   */
   const char* sessionPath() const;
+
+  /*
+   * 函数作用：从当前会话日志文件中读取最近的第 N 条记录。
+   * 参数说明：
+   * - offset=0 表示最新一条
+   * - out_available_count 返回当前可浏览的最近记录条数
+   */
+  bool readRecentRecord(
+      uint8_t offset,
+      uint16_t* out_step,
+      char* out_expression,
+      size_t expression_length,
+      char* out_result,
+      size_t result_length,
+      uint8_t* out_available_count) const;
 
  private:
   bool ready_ = false;
@@ -34,6 +72,17 @@ class StorageSd {
   HistoryManager history_manager_;
 
   bool openSessionFileIfNeeded();
+
+  /*
+   * 函数作用：把单行 STEP 日志解析为步号、表达式和结果。
+   */
+  bool parseHistoryLine(
+      const char* line,
+      uint16_t* out_step,
+      char* out_expression,
+      size_t expression_length,
+      char* out_result,
+      size_t result_length) const;
 };
 
 }  // namespace calculator

@@ -24,6 +24,9 @@ constexpr size_t kFormatBufferSize = 20;
 
 constexpr uint16_t kDisplayColumns = 20;
 constexpr uint16_t kDisplayRows = 4;
+constexpr uint8_t kHistoryCapacity = 3;
+constexpr size_t kHistoryExpressionSize = 16;
+constexpr size_t kHistoryResultSize = 16;
 
 constexpr char kLogDirectoryName[] = "LOGS";
 constexpr size_t kPathBufferSize = 24;

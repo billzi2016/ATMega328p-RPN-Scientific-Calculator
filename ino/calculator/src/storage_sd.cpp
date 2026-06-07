@@ -9,6 +9,8 @@
 #include "../include/storage_sd.h"
 
 #include <SPI.h>
+#include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 
 #include "../include/config.h"
@@ -41,6 +43,118 @@ bool StorageSd::sessionOpened() const {
 
 const char* StorageSd::sessionPath() const {
   return session_path_;
+}
+
+bool StorageSd::readRecentRecord(
+    uint8_t offset,
+    uint16_t* out_step,
+    char* out_expression,
+    size_t expression_length,
+    char* out_result,
+    size_t result_length,
+    uint8_t* out_available_count) const {
+  if (out_step != nullptr) {
+    *out_step = 0;
+  }
+  if (out_expression != nullptr && expression_length > 0) {
+    out_expression[0] = '\0';
+  }
+  if (out_result != nullptr && result_length > 0) {
+    out_result[0] = '\0';
+  }
+  if (out_available_count != nullptr) {
+    *out_available_count = 0;
+  }
+
+  if (!ready_ || !session_opened_) {
+    return false;
+  }
+
+  File read_file = SD.open(session_path_, FILE_READ);
+  if (!read_file) {
+    return false;
+  }
+
+  uint16_t recent_steps[kHistoryCapacity] = {};
+  char recent_expressions[kHistoryCapacity][kHistoryExpressionSize] = {};
+  char recent_results[kHistoryCapacity][kHistoryResultSize] = {};
+  uint8_t recent_count = 0;
+  uint8_t recent_head = 0;
+  char line_buffer[64] = {};
+  size_t line_length = 0;
+
+  while (read_file.available()) {
+    const char incoming = static_cast<char>(read_file.read());
+    if (incoming == '\r') {
+      continue;
+    }
+
+    if (incoming != '\n' && line_length + 1 < sizeof(line_buffer)) {
+      line_buffer[line_length++] = incoming;
+      line_buffer[line_length] = '\0';
+      continue;
+    }
+
+    if (line_length != 0) {
+      uint16_t step = 0;
+      char expression[kHistoryExpressionSize] = {};
+      char result[kHistoryResultSize] = {};
+      if (parseHistoryLine(line_buffer, &step, expression, sizeof(expression), result, sizeof(result))) {
+        recent_steps[recent_head] = step;
+        strncpy(recent_expressions[recent_head], expression, sizeof(recent_expressions[recent_head]) - 1);
+        strncpy(recent_results[recent_head], result, sizeof(recent_results[recent_head]) - 1);
+        recent_head = static_cast<uint8_t>((recent_head + 1) % kHistoryCapacity);
+        if (recent_count < kHistoryCapacity) {
+          ++recent_count;
+        }
+      }
+    }
+
+    line_length = 0;
+    line_buffer[0] = '\0';
+  }
+
+  if (line_length != 0) {
+    uint16_t step = 0;
+    char expression[kHistoryExpressionSize] = {};
+    char result[kHistoryResultSize] = {};
+    if (parseHistoryLine(line_buffer, &step, expression, sizeof(expression), result, sizeof(result))) {
+      recent_steps[recent_head] = step;
+      strncpy(recent_expressions[recent_head], expression, sizeof(recent_expressions[recent_head]) - 1);
+      strncpy(recent_results[recent_head], result, sizeof(recent_results[recent_head]) - 1);
+      recent_head = static_cast<uint8_t>((recent_head + 1) % kHistoryCapacity);
+      if (recent_count < kHistoryCapacity) {
+        ++recent_count;
+      }
+    }
+  }
+
+  read_file.close();
+
+  if (out_available_count != nullptr) {
+    *out_available_count = recent_count;
+  }
+  if (offset >= recent_count) {
+    return false;
+  }
+
+  int16_t target_index = static_cast<int16_t>(recent_head) - 1 - offset;
+  while (target_index < 0) {
+    target_index += kHistoryCapacity;
+  }
+
+  if (out_step != nullptr) {
+    *out_step = recent_steps[target_index];
+  }
+  if (out_expression != nullptr && expression_length > 0) {
+    strncpy(out_expression, recent_expressions[target_index], expression_length - 1);
+    out_expression[expression_length - 1] = '\0';
+  }
+  if (out_result != nullptr && result_length > 0) {
+    strncpy(out_result, recent_results[target_index], result_length - 1);
+    out_result[result_length - 1] = '\0';
+  }
+  return true;
 }
 
 bool StorageSd::appendRecord(const HistoryRecord& record) {
@@ -85,6 +199,44 @@ bool StorageSd::openSessionFileIfNeeded() {
   strncpy(session_path_, path, sizeof(session_path_) - 1);
   session_path_[sizeof(session_path_) - 1] = '\0';
   session_opened_ = true;
+  return true;
+}
+
+bool StorageSd::parseHistoryLine(
+    const char* line,
+    uint16_t* out_step,
+    char* out_expression,
+    size_t expression_length,
+    char* out_result,
+    size_t result_length) const {
+  if (line == nullptr || strncmp(line, "STEP=", 5) != 0) {
+    return false;
+  }
+
+  const char* expr_tag = strstr(line, " | EXPR=");
+  const char* result_tag = strstr(line, " | RESULT=");
+  if (expr_tag == nullptr || result_tag == nullptr || expr_tag >= result_tag) {
+    return false;
+  }
+
+  if (out_step != nullptr) {
+    *out_step = static_cast<uint16_t>(atoi(line + 5));
+  }
+
+  const char* expr_start = expr_tag + 8;
+  const size_t expr_size = static_cast<size_t>(result_tag - expr_start);
+  if (out_expression != nullptr && expression_length > 0) {
+    const size_t copy_size = expr_size < (expression_length - 1) ? expr_size : (expression_length - 1);
+    memcpy(out_expression, expr_start, copy_size);
+    out_expression[copy_size] = '\0';
+  }
+
+  const char* result_start = result_tag + 10;
+  if (out_result != nullptr && result_length > 0) {
+    strncpy(out_result, result_start, result_length - 1);
+    out_result[result_length - 1] = '\0';
+  }
+
   return true;
 }
 

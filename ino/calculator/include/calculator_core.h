@@ -53,6 +53,16 @@ class CalculatorCore {
   bool dup();
 
   /*
+   * 函数作用：执行四级栈上卷。
+   */
+  bool rollUp();
+
+  /*
+   * 函数作用：执行四级栈下卷。
+   */
+  bool rollDown();
+
+  /*
    * 函数作用：执行二元运算。
    */
   bool applyBinary(BinaryOp op);
@@ -63,9 +73,102 @@ class CalculatorCore {
   bool toggleSign();
 
   /*
+   * 函数作用：把栈顶按百分数处理。
+   */
+  bool percent();
+
+  /*
+   * 函数作用：对栈顶执行倒数。
+   */
+  bool reciprocal();
+
+  /*
+   * 函数作用：对栈顶执行平方。
+   */
+  bool square();
+
+  /*
+   * 函数作用：对栈顶执行平方根。
+   */
+  bool squareRoot();
+
+  /*
+   * 函数作用：对栈顶执行自然对数。
+   */
+  bool naturalLog();
+
+  /*
+   * 函数作用：对栈顶执行常用对数。
+   */
+  bool commonLog();
+
+  /*
+   * 函数作用：对栈顶执行 10 的幂。
+   */
+  bool exp10();
+
+  /*
+   * 函数作用：对栈顶执行 e 的幂。
+   */
+  bool expE();
+
+  /*
+   * 函数作用：对 Y 和 X 执行幂运算 Y^X。
+   */
+  bool power();
+
+  /*
+   * 函数作用：按当前角度模式计算三角函数。
+   */
+  bool trigSin(AngleMode angle_mode);
+  bool trigCos(AngleMode angle_mode);
+  bool trigTan(AngleMode angle_mode);
+
+  /*
+   * 函数作用：把数学常数压入栈顶。
+   */
+  bool pushPi();
+  bool pushE();
+
+  /*
+   * 函数作用：把栈顶值存入 STO 寄存器。
+   */
+  void store();
+
+  /*
+   * 函数作用：从 STO 寄存器回读并压栈。
+   */
+  bool recall();
+
+  /*
+   * 函数作用：读取 M 寄存器当前值。
+   */
+  float memory() const;
+
+  /*
+   * 函数作用：清空 M 寄存器。
+   */
+  void memoryClear();
+
+  /*
+   * 函数作用：把栈顶累加到 M 寄存器。
+   */
+  void memoryAdd();
+
+  /*
+   * 函数作用：把栈顶从 M 寄存器中减去。
+   */
+  void memorySubtract();
+
+  /*
    * 函数作用：获取当前栈顶值。
    */
   float top() const;
+
+  /*
+   * 函数作用：读取指定层级的栈值。
+   */
+  float valueAt(uint8_t index) const;
 
   /*
    * 函数作用：把栈顶值格式化为可显示字符串。
@@ -76,16 +179,25 @@ class CalculatorCore {
   void formatTop(char* buffer, size_t length) const;
 
   /*
+   * 函数作用：按当前显示进制把任意数值格式化为字符串。
+   */
+  void formatValue(float value, NumberBase base, char* buffer, size_t length) const;
+
+  /*
    * 函数作用：返回最近一次错误码。
    */
   ErrorCode last_error() const;
 
  private:
   float stack_[kStackDepth];
+  float storage_register_ = 0.0f;
+  float memory_register_ = 0.0f;
   ErrorCode last_error_ = ErrorCode::kNone;
 
   void setError(ErrorCode code);
   void shiftDownFrom(uint8_t index);
+  bool requireFinite(float value);
+  float radiansFromMode(float value, AngleMode angle_mode) const;
 };
 
 }  // namespace calculator
