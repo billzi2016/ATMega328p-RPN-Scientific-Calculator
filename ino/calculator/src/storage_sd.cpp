@@ -18,6 +18,11 @@
 
 namespace calculator {
 
+/*
+ * 函数作用：初始化 SD 卡并准备历史目录管理器。
+ * 说明：
+ * - 若 SD 初始化失败，系统仍允许继续计算，只是历史功能降级。
+ */
 void StorageSd::begin() {
   ready_ = SD.begin(kSdCsPin);
   session_opened_ = false;
@@ -33,6 +38,9 @@ bool StorageSd::available() const {
   return ready_;
 }
 
+/*
+ * 函数作用：确保当前会话文件已创建。
+ */
 bool StorageSd::ensureSessionFile() {
   return openSessionFileIfNeeded();
 }
@@ -45,6 +53,12 @@ const char* StorageSd::sessionPath() const {
   return session_path_;
 }
 
+/*
+ * 函数作用：从当前会话文件中读取最近的若干条记录之一。
+ * 说明：
+ * - 这里每次进入历史页都直接重新读 SD，不依赖 RAM 中的多条缓存。
+ * - offset=0 代表最新一条，offset 增大表示更早的记录。
+ */
 bool StorageSd::readRecentRecord(
     uint8_t offset,
     uint16_t* out_step,
@@ -202,6 +216,11 @@ bool StorageSd::openSessionFileIfNeeded() {
   return true;
 }
 
+/*
+ * 函数作用：解析单行历史记录文本。
+ * 输入格式：
+ * STEP=0001 | EXPR=... | RESULT=...
+ */
 bool StorageSd::parseHistoryLine(
     const char* line,
     uint16_t* out_step,

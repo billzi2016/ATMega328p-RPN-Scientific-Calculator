@@ -35,7 +35,7 @@ void DisplayLcd2004::begin() {
 void DisplayLcd2004::showBootScreen() {
   g_lcd.clear();
   g_lcd.setCursor(0, 0);
-  g_lcd.print(F("ATMega328P RPN"));
+  g_lcd.print(F("Mega2560 RPN"));
   g_lcd.setCursor(0, 1);
   g_lcd.print(F("Calculator Init"));
   g_lcd.setCursor(0, 2);
@@ -47,7 +47,7 @@ void DisplayLcd2004::showBootScreen() {
 void DisplayLcd2004::renderHome(const AppViewModel& model) {
   g_lcd.clear();
   g_lcd.setCursor(0, 0);
-  g_lcd.print(F("RPN Calculator"));
+  g_lcd.print(F("Mega2560 RPN Calc"));
   g_lcd.setCursor(0, 1);
   g_lcd.print(model.input_line);
   g_lcd.setCursor(0, 2);

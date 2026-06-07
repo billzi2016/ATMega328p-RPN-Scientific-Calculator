@@ -1,12 +1,12 @@
-# 基于 ATmega328P 的 RPN 科学计算器 PRD
+# 基于 Arduino Mega 2560 的 RPN 科学计算器 PRD
 
 ## 1. 项目概述
 
 ### 1.1 项目名称
-ATmega328P RPN Scientific Calculator
+Arduino Mega 2560 RPN Scientific Calculator
 
 ### 1.2 项目目标
-基于 Arduino 生态与 ATmega328P 单片机，开发一套可落地、可维护、具备工业化组织方式的 RPN 科学计算器方案。设备应具备完整的数值输入、RPN 栈操作、科学函数、历史记录保存、文件化归档、基础模式切换与异常处理能力。
+基于 Arduino 生态与 `Arduino Mega 2560` 单片机平台，开发一套可落地、可维护、具备工业化组织方式的 RPN 科学计算器方案。设备应具备完整的数值输入、RPN 栈操作、科学函数、历史记录保存、文件化归档、基础模式切换与异常处理能力。
 
 ### 1.3 项目定位
 - 面向嵌入式硬件实作，而不是桌面软件演示
@@ -16,7 +16,7 @@ ATmega328P RPN Scientific Calculator
 ## 2. 范围定义
 
 ### 2.1 本期必须实现
-- 使用 `ATmega328P` 作为主控
+- 使用 `Arduino Mega 2560` 作为主控
 - 使用 `LCD2004` 显示
 - 使用 `8x8` 键盘矩阵作为主输入设备
 - 使用 `74HC595` 进行键盘行扫描输出
@@ -45,12 +45,12 @@ ATmega328P RPN Scientific Calculator
 ## 3. 硬件方案
 
 ### 3.1 主控
-- 推荐：`Arduino Nano / Uno` 兼容板，核心为 `ATmega328P`
+- 推荐：`Arduino Mega 2560`
 - 工作电压：`5V`
 - 资源约束：
-  - Flash：`32KB`
-  - SRAM：`2KB`
-  - EEPROM：`1KB`
+  - Flash：`256KB`
+  - SRAM：`8KB`
+  - EEPROM：`4KB`
 
 ### 3.2 显示模块
 - 模块：`LCD2004`

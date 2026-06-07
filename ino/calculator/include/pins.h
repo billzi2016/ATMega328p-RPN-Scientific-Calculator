@@ -35,11 +35,11 @@ constexpr uint8_t kShift165Data = 7;
 constexpr uint8_t kReservedBuzzerOrLed = 8;
 constexpr uint8_t kReservedCardDetect = 9;
 
-// TF 卡 SPI。
-constexpr uint8_t kSdCsPin = 10;
-constexpr uint8_t kSpiMosiPin = 11;
-constexpr uint8_t kSpiMisoPin = 12;
-constexpr uint8_t kSpiClockPin = 13;
+// TF 卡 SPI：按 Mega 2560 硬件 SPI 引脚定义。
+constexpr uint8_t kSdCsPin = 53;
+constexpr uint8_t kSpiMosiPin = 51;
+constexpr uint8_t kSpiMisoPin = 50;
+constexpr uint8_t kSpiClockPin = 52;
 
 }  // namespace calculator
 
