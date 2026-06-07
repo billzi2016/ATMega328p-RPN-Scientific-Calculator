@@ -27,11 +27,17 @@ LiquidCrystal g_lcd(
 
 }  // namespace
 
+/*
+ * 函数作用：初始化 LCD2004。
+ */
 void DisplayLcd2004::begin() {
   g_lcd.begin(kDisplayColumns, kDisplayRows);
   g_lcd.clear();
 }
 
+/*
+ * 函数作用：显示启动页。
+ */
 void DisplayLcd2004::showBootScreen() {
   g_lcd.clear();
   g_lcd.setCursor(0, 0);
@@ -44,6 +50,9 @@ void DisplayLcd2004::showBootScreen() {
   g_lcd.print(F("Please Wait..."));
 }
 
+/*
+ * 函数作用：渲染主界面。
+ */
 void DisplayLcd2004::renderHome(const AppViewModel& model) {
   g_lcd.clear();
   g_lcd.setCursor(0, 0);
@@ -56,6 +65,9 @@ void DisplayLcd2004::renderHome(const AppViewModel& model) {
   g_lcd.print(model.status_line);
 }
 
+/*
+ * 函数作用：显示普通字符串消息页。
+ */
 void DisplayLcd2004::showMessage(const char* line1, const char* line2) {
   g_lcd.clear();
   g_lcd.setCursor(0, 1);
@@ -64,6 +76,9 @@ void DisplayLcd2004::showMessage(const char* line1, const char* line2) {
   g_lcd.print(line2 == nullptr ? "" : line2);
 }
 
+/*
+ * 函数作用：显示 Flash 字符串消息页。
+ */
 void DisplayLcd2004::showMessage(const __FlashStringHelper* line1, const __FlashStringHelper* line2) {
   g_lcd.clear();
   g_lcd.setCursor(0, 1);

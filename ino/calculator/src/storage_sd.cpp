@@ -9,9 +9,9 @@
 #include "../include/storage_sd.h"
 
 #include <SPI.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 #include "../include/config.h"
 #include "../include/pins.h"
@@ -26,6 +26,7 @@ namespace calculator {
 void StorageSd::begin() {
   ready_ = SD.begin(kSdCsPin);
   session_opened_ = false;
+  session_path_[0] = '\0';
 
   if (!ready_) {
     return;
@@ -34,6 +35,9 @@ void StorageSd::begin() {
   ready_ = history_manager_.begin();
 }
 
+/*
+ * 函数作用：返回 SD 当前是否可用。
+ */
 bool StorageSd::available() const {
   return ready_;
 }
@@ -45,21 +49,166 @@ bool StorageSd::ensureSessionFile() {
   return openSessionFileIfNeeded();
 }
 
+/*
+ * 函数作用：向当前会话文件追加一条历史记录。
+ */
+bool StorageSd::appendRecord(const HistoryRecord& record) {
+  if (!openSessionFileIfNeeded()) {
+    return false;
+  }
+
+  session_file_.print(F("STEP="));
+  session_file_.print(record.step);
+  session_file_.print(F(" | EXPR="));
+  session_file_.print(record.expression == nullptr ? "" : record.expression);
+  session_file_.print(F(" | RESULT="));
+  session_file_.println(record.result == nullptr ? "" : record.result);
+  session_file_.flush();
+  return true;
+}
+
+/*
+ * 函数作用：返回本次会话日志文件是否已经真正创建。
+ */
 bool StorageSd::sessionOpened() const {
   return session_opened_;
 }
 
+/*
+ * 函数作用：返回当前会话日志文件路径。
+ */
 const char* StorageSd::sessionPath() const {
   return session_path_;
 }
 
 /*
- * 函数作用：从当前会话文件中读取最近的若干条记录之一。
+ * 函数作用：返回当前可浏览的历史会话总数。
  * 说明：
- * - 这里每次进入历史页都直接重新读 SD，不依赖 RAM 中的多条缓存。
- * - offset=0 代表最新一条，offset 增大表示更早的记录。
+ * - 若当前会话文件已创建，则它也要计入可浏览数量。
+ */
+uint16_t StorageSd::availableSessionCount() const {
+  return static_cast<uint16_t>(history_manager_.existingSessionCount() + (session_opened_ ? 1 : 0));
+}
+
+/*
+ * 函数作用：返回当前最新会话编号。
+ */
+uint16_t StorageSd::latestSessionIndex() const {
+  return availableSessionCount();
+}
+
+/*
+ * 函数作用：返回当前已打开会话编号。
+ */
+uint16_t StorageSd::currentSessionIndex() const {
+  if (!session_opened_) {
+    return 0;
+  }
+  return history_manager_.nextSessionIndex();
+}
+
+/*
+ * 函数作用：从当前最新会话中读取最近的第 N 条记录。
  */
 bool StorageSd::readRecentRecord(
+    uint8_t offset,
+    uint16_t* out_step,
+    char* out_expression,
+    size_t expression_length,
+    char* out_result,
+    size_t result_length,
+    uint8_t* out_available_count) const {
+  return readRecentRecordFromSession(
+      latestSessionIndex(),
+      offset,
+      out_step,
+      out_expression,
+      expression_length,
+      out_result,
+      result_length,
+      out_available_count);
+}
+
+/*
+ * 函数作用：从指定会话文件中读取最近的第 N 条记录。
+ * 说明：
+ * - 若读取的是当前仍在写入的会话，先 flush 再重新打开只读句柄。
+ */
+bool StorageSd::readRecentRecordFromSession(
+    uint16_t session_index,
+    uint8_t offset,
+    uint16_t* out_step,
+    char* out_expression,
+    size_t expression_length,
+    char* out_result,
+    size_t result_length,
+    uint8_t* out_available_count) const {
+  if (!ready_ || session_index == 0 || session_index > availableSessionCount()) {
+    if (out_available_count != nullptr) {
+      *out_available_count = 0;
+    }
+    return false;
+  }
+
+  char path[kPathBufferSize] = {};
+  if (session_opened_ && session_index == currentSessionIndex()) {
+    strncpy(path, session_path_, sizeof(path) - 1);
+    const_cast<File&>(session_file_).flush();
+  } else if (!history_manager_.buildSessionPathForIndex(session_index, path, sizeof(path))) {
+    return false;
+  }
+
+  return readRecentRecordFromPath(
+      path,
+      offset,
+      out_step,
+      out_expression,
+      expression_length,
+      out_result,
+      result_length,
+      out_available_count);
+}
+
+/*
+ * 函数作用：确保当前会话文件已经打开。
+ */
+bool StorageSd::openSessionFileIfNeeded() {
+  if (!ready_) {
+    return false;
+  }
+
+  if (session_opened_) {
+    return true;
+  }
+
+  char path[kPathBufferSize];
+  if (!history_manager_.buildNextSessionPath(path, sizeof(path))) {
+    return false;
+  }
+
+  session_file_ = SD.open(path, FILE_WRITE);
+  if (!session_file_) {
+    ready_ = false;
+    return false;
+  }
+
+  session_file_.println(F("MODE=RPN"));
+  session_file_.println(F("ANGLE=DEG"));
+  session_file_.println(F("----"));
+  session_file_.flush();
+  strncpy(session_path_, path, sizeof(session_path_) - 1);
+  session_path_[sizeof(session_path_) - 1] = '\0';
+  session_opened_ = true;
+  return true;
+}
+
+/*
+ * 函数作用：从指定文件路径中读取最近的若干条记录之一。
+ * 说明：
+ * - 为了省 SRAM，只保留最近 kHistoryCapacity 条解析结果。
+ */
+bool StorageSd::readRecentRecordFromPath(
+    const char* path,
     uint8_t offset,
     uint16_t* out_step,
     char* out_expression,
@@ -80,11 +229,11 @@ bool StorageSd::readRecentRecord(
     *out_available_count = 0;
   }
 
-  if (!ready_ || !session_opened_) {
+  if (path == nullptr || path[0] == '\0') {
     return false;
   }
 
-  File read_file = SD.open(session_path_, FILE_READ);
+  File read_file = SD.open(path, FILE_READ);
   if (!read_file) {
     return false;
   }
@@ -116,7 +265,9 @@ bool StorageSd::readRecentRecord(
       if (parseHistoryLine(line_buffer, &step, expression, sizeof(expression), result, sizeof(result))) {
         recent_steps[recent_head] = step;
         strncpy(recent_expressions[recent_head], expression, sizeof(recent_expressions[recent_head]) - 1);
+        recent_expressions[recent_head][sizeof(recent_expressions[recent_head]) - 1] = '\0';
         strncpy(recent_results[recent_head], result, sizeof(recent_results[recent_head]) - 1);
+        recent_results[recent_head][sizeof(recent_results[recent_head]) - 1] = '\0';
         recent_head = static_cast<uint8_t>((recent_head + 1) % kHistoryCapacity);
         if (recent_count < kHistoryCapacity) {
           ++recent_count;
@@ -135,7 +286,9 @@ bool StorageSd::readRecentRecord(
     if (parseHistoryLine(line_buffer, &step, expression, sizeof(expression), result, sizeof(result))) {
       recent_steps[recent_head] = step;
       strncpy(recent_expressions[recent_head], expression, sizeof(recent_expressions[recent_head]) - 1);
+      recent_expressions[recent_head][sizeof(recent_expressions[recent_head]) - 1] = '\0';
       strncpy(recent_results[recent_head], result, sizeof(recent_results[recent_head]) - 1);
+      recent_results[recent_head][sizeof(recent_results[recent_head]) - 1] = '\0';
       recent_head = static_cast<uint8_t>((recent_head + 1) % kHistoryCapacity);
       if (recent_count < kHistoryCapacity) {
         ++recent_count;
@@ -168,51 +321,6 @@ bool StorageSd::readRecentRecord(
     strncpy(out_result, recent_results[target_index], result_length - 1);
     out_result[result_length - 1] = '\0';
   }
-  return true;
-}
-
-bool StorageSd::appendRecord(const HistoryRecord& record) {
-  if (!openSessionFileIfNeeded()) {
-    return false;
-  }
-
-  session_file_.print(F("STEP="));
-  session_file_.print(record.step);
-  session_file_.print(F(" | EXPR="));
-  session_file_.print(record.expression == nullptr ? "" : record.expression);
-  session_file_.print(F(" | RESULT="));
-  session_file_.println(record.result == nullptr ? "" : record.result);
-  session_file_.flush();
-  return true;
-}
-
-bool StorageSd::openSessionFileIfNeeded() {
-  if (!ready_) {
-    return false;
-  }
-
-  if (session_opened_) {
-    return true;
-  }
-
-  char path[kPathBufferSize];
-  if (!history_manager_.buildNextSessionPath(path, sizeof(path))) {
-    return false;
-  }
-
-  session_file_ = SD.open(path, FILE_WRITE);
-  if (!session_file_) {
-    ready_ = false;
-    return false;
-  }
-
-  session_file_.println(F("MODE=RPN"));
-  session_file_.println(F("ANGLE=DEG"));
-  session_file_.println(F("----"));
-  session_file_.flush();
-  strncpy(session_path_, path, sizeof(session_path_) - 1);
-  session_path_[sizeof(session_path_) - 1] = '\0';
-  session_opened_ = true;
   return true;
 }
 

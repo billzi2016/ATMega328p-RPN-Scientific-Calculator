@@ -13,6 +13,9 @@
 
 namespace calculator {
 
+/*
+ * 函数作用：扫描日志目录，确定下一个可用会话编号。
+ */
 bool HistoryManager::begin() {
   if (!ensureLogDirectory()) {
     return false;
@@ -22,7 +25,9 @@ bool HistoryManager::begin() {
   char path[kPathBufferSize];
 
   while (true) {
-    snprintf(path, sizeof(path), "%s/%u.txt", kLogDirectoryName, next_session_index_);
+    if (!buildSessionPathForIndex(next_session_index_, path, sizeof(path))) {
+      return false;
+    }
     if (!SD.exists(path)) {
       return true;
     }
@@ -30,15 +35,42 @@ bool HistoryManager::begin() {
   }
 }
 
+/*
+ * 函数作用：构造下一个新会话文件路径。
+ */
 bool HistoryManager::buildNextSessionPath(char* out_path, size_t length) {
-  if (out_path == nullptr || length == 0) {
+  return buildSessionPathForIndex(next_session_index_, out_path, length);
+}
+
+/*
+ * 函数作用：按指定编号构造会话文件路径。
+ */
+bool HistoryManager::buildSessionPathForIndex(uint16_t session_index, char* out_path, size_t length) const {
+  if (out_path == nullptr || length == 0 || session_index == 0) {
     return false;
   }
 
-  snprintf(out_path, length, "%s/%u.txt", kLogDirectoryName, next_session_index_);
+  snprintf(out_path, length, "%s/%u.txt", kLogDirectoryName, session_index);
   return true;
 }
 
+/*
+ * 函数作用：返回当前已经存在的历史会话数量。
+ */
+uint16_t HistoryManager::existingSessionCount() const {
+  return static_cast<uint16_t>(next_session_index_ == 0 ? 0 : next_session_index_ - 1);
+}
+
+/*
+ * 函数作用：返回下一个待分配的会话编号。
+ */
+uint16_t HistoryManager::nextSessionIndex() const {
+  return next_session_index_;
+}
+
+/*
+ * 函数作用：确保日志目录存在。
+ */
 bool HistoryManager::ensureLogDirectory() {
   if (SD.exists(kLogDirectoryName)) {
     return true;

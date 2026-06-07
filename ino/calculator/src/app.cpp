@@ -3,7 +3,7 @@
  * 文件作用：实现应用层主状态机。
  * 设计意图：
  * 1. 把输入事件、计算逻辑、界面刷新、存储记录统一收敛到一个调度层。
- * 2. 提供可以直接操作的最小完整计算器链路，而不是只保留框架。
+ * 2. 提供可运行的主界面、菜单、历史浏览、文件浏览与基础计算链路。
  */
 
 #include "../include/app.h"
@@ -14,6 +14,9 @@
 
 namespace calculator {
 
+/*
+ * 函数作用：初始化应用层以及全部子模块。
+ */
 void App::begin() {
   diagnostics_.begin();
   keyboard_.begin();
@@ -22,10 +25,15 @@ void App::begin() {
   core_.begin();
   storage_.begin();
   clearInput();
+  history_session_index_ = storage_.latestSessionIndex();
   history_view_offset_ = 0;
+  file_browser_session_index_ = storage_.latestSessionIndex();
   renderCurrentScreen();
 }
 
+/*
+ * 函数作用：执行一次主循环更新。
+ */
 void App::update() {
   keyboard_.update();
 
@@ -38,6 +46,9 @@ void App::update() {
   delay(kMainLoopDelayMs);
 }
 
+/*
+ * 函数作用：按当前页面状态分发按键事件。
+ */
 void App::handleKeyEvent(const KeyEvent& event) {
   if (!event.pressed) {
     return;
@@ -66,12 +77,13 @@ void App::handleKeyEvent(const KeyEvent& event) {
       if (event.code == KeyCode::kBack || event.code == KeyCode::kHist) {
         screen_ = AppScreen::kHome;
       } else if (event.code == KeyCode::kUp) {
-        // 历史界面翻页时不使用 RAM 缓存，直接试探性读取 SD 中更早的一条。
+        // 历史界面向更早的记录翻页时，直接试探性读取选中文件中更早的一条记录。
         uint16_t step = 0;
         char expression[kHistoryExpressionSize] = {};
         char result[kHistoryResultSize] = {};
         uint8_t available_count = 0;
-        if (storage_.readRecentRecord(
+        if (storage_.readRecentRecordFromSession(
+                history_session_index_,
                 static_cast<uint8_t>(history_view_offset_ + 1),
                 &step,
                 expression,
@@ -83,16 +95,40 @@ void App::handleKeyEvent(const KeyEvent& event) {
         }
       } else if (event.code == KeyCode::kDel && history_view_offset_ > 0) {
         --history_view_offset_;
+      } else if (event.code == KeyCode::kLeft && history_session_index_ > 1) {
+        --history_session_index_;
+        history_view_offset_ = 0;
+      } else if (event.code == KeyCode::kRight && history_session_index_ < storage_.availableSessionCount()) {
+        ++history_session_index_;
+        history_view_offset_ = 0;
+      } else if (event.code == KeyCode::kOk) {
+        file_browser_session_index_ = history_session_index_;
+        screen_ = AppScreen::kFileBrowser;
       }
       break;
     case AppScreen::kFileBrowser:
       if (event.code == KeyCode::kBack || event.code == KeyCode::kFile) {
         screen_ = AppScreen::kHome;
+      } else if (event.code == KeyCode::kLeft && file_browser_session_index_ > 1) {
+        --file_browser_session_index_;
+      } else if (event.code == KeyCode::kRight && file_browser_session_index_ < storage_.availableSessionCount()) {
+        ++file_browser_session_index_;
+      } else if (event.code == KeyCode::kUp) {
+        file_browser_session_index_ = storage_.latestSessionIndex();
+      } else if (event.code == KeyCode::kDel && storage_.availableSessionCount() > 0) {
+        file_browser_session_index_ = 1;
+      } else if (event.code == KeyCode::kOk && file_browser_session_index_ > 0) {
+        history_session_index_ = file_browser_session_index_;
+        history_view_offset_ = 0;
+        screen_ = AppScreen::kHistory;
       }
       break;
   }
 }
 
+/*
+ * 函数作用：处理主计算界面的按键逻辑。
+ */
 void App::handleHomeKey(KeyCode code) {
   switch (code) {
     case KeyCode::k0: appendInputChar('0'); break;
@@ -107,6 +143,13 @@ void App::handleHomeKey(KeyCode code) {
     case KeyCode::k9: appendInputChar('9'); break;
     case KeyCode::kDot: appendInputChar('.'); break;
     case KeyCode::kExp: appendInputChar('e'); break;
+    case KeyCode::kOn:
+      screen_ = AppScreen::kHome;
+      break;
+    case KeyCode::kOff:
+      core_.reset();
+      clearInput();
+      break;
     case KeyCode::kDel:
       if (input_length_ > 0) {
         --input_length_;
@@ -259,10 +302,12 @@ void App::handleHomeKey(KeyCode code) {
       number_base_ = NumberBase::kHex;
       break;
     case KeyCode::kHist:
-      screen_ = AppScreen::kHistory;
+      history_session_index_ = storage_.latestSessionIndex();
       history_view_offset_ = 0;
+      screen_ = AppScreen::kHistory;
       break;
     case KeyCode::kFile:
+      file_browser_session_index_ = storage_.latestSessionIndex();
       screen_ = AppScreen::kFileBrowser;
       break;
     case KeyCode::kMenu:
@@ -274,6 +319,9 @@ void App::handleHomeKey(KeyCode code) {
   }
 }
 
+/*
+ * 函数作用：根据当前页面状态刷新 LCD。
+ */
 void App::renderCurrentScreen() {
   if (screen_ != AppScreen::kHome) {
     switch (screen_) {
@@ -302,6 +350,9 @@ void App::renderCurrentScreen() {
   display_.renderHome(model);
 }
 
+/*
+ * 函数作用：渲染菜单界面。
+ */
 void App::renderMenuScreen() {
   char line1[kDisplayColumns + 1] = {};
   char line2[kDisplayColumns + 1] = {};
@@ -316,8 +367,10 @@ void App::renderMenuScreen() {
   display_.showMessage(line1, line2);
 }
 
+/*
+ * 函数作用：从选中的历史会话中读取记录并渲染历史界面。
+ */
 void App::renderHistoryScreen() {
-  // 历史界面始终直接读取 SD 会话文件，而不是依赖内存中的多条历史缓存。
   uint16_t step = 0;
   char line1[kDisplayColumns + 1] = {};
   char line2[kDisplayColumns + 1] = {};
@@ -325,7 +378,8 @@ void App::renderHistoryScreen() {
   char result[kHistoryResultSize] = {};
   uint8_t available_count = 0;
 
-  if (!storage_.readRecentRecord(
+  if (!storage_.readRecentRecordFromSession(
+          history_session_index_,
           history_view_offset_,
           &step,
           expression,
@@ -337,30 +391,41 @@ void App::renderHistoryScreen() {
     return;
   }
 
-  snprintf(line1, sizeof(line1), "S:%u %s", step, expression);
+  snprintf(line1, sizeof(line1), "F:%u S:%u %s", history_session_index_, step, expression);
   snprintf(line2, sizeof(line2), "R:%s %u/%u", result, history_view_offset_ + 1, available_count);
   display_.showMessage(line1, line2);
 }
 
+/*
+ * 函数作用：渲染会话文件浏览界面。
+ */
 void App::renderFileScreen() {
   char line1[kDisplayColumns + 1] = {};
   char line2[kDisplayColumns + 1] = {};
+  const uint16_t available_count = storage_.availableSessionCount();
 
   if (!storage_.available()) {
     display_.showMessage(F("SD NOT READY"), F("BK:HOME"));
     return;
   }
 
-  if (!storage_.sessionOpened()) {
+  if (available_count == 0) {
     display_.showMessage(F("LOG FILE:NONE"), F("CALC TO CREATE"));
     return;
   }
 
-  strncpy(line1, "LOG FILE", sizeof(line1) - 1);
-  strncpy(line2, storage_.sessionPath(), sizeof(line2) - 1);
+  if (file_browser_session_index_ == 0 || file_browser_session_index_ > available_count) {
+    file_browser_session_index_ = available_count;
+  }
+
+  snprintf(line1, sizeof(line1), "FILE %u/%u", file_browser_session_index_, available_count);
+  snprintf(line2, sizeof(line2), "%u.txt OK=OPEN", file_browser_session_index_);
   display_.showMessage(line1, line2);
 }
 
+/*
+ * 函数作用：向当前输入缓冲区追加一个字符。
+ */
 void App::appendInputChar(char ch) {
   if (input_length_ + 1 >= kInputBufferSize) {
     return;
@@ -369,11 +434,17 @@ void App::appendInputChar(char ch) {
   input_buffer_[input_length_] = '\0';
 }
 
+/*
+ * 函数作用：清空当前输入缓冲区。
+ */
 void App::clearInput() {
   input_length_ = 0;
   input_buffer_[0] = '\0';
 }
 
+/*
+ * 函数作用：若输入缓冲区非空，则把文本转换为数值并压栈。
+ */
 bool App::commitInputIfNeeded() {
   if (input_length_ == 0) {
     return false;
@@ -385,6 +456,9 @@ bool App::commitInputIfNeeded() {
   return true;
 }
 
+/*
+ * 函数作用：执行二元运算并在成功后记录历史。
+ */
 void App::performBinaryOperation(BinaryOp op, const char* expression_text) {
   commitInputIfNeeded();
   if (core_.applyBinary(op)) {
@@ -392,6 +466,9 @@ void App::performBinaryOperation(BinaryOp op, const char* expression_text) {
   }
 }
 
+/*
+ * 函数作用：执行一元运算并在成功后记录历史。
+ */
 void App::performUnaryOperation(bool succeeded, const char* expression_text) {
   if (!succeeded) {
     return;
@@ -399,6 +476,9 @@ void App::performUnaryOperation(bool succeeded, const char* expression_text) {
   logResult(expression_text);
 }
 
+/*
+ * 函数作用：把当前计算结果写入运行态缓存，并追加到 SD 历史文件。
+ */
 void App::logResult(const char* expression_text) {
   char result_text[kResultBufferSize];
   core_.formatValue(core_.top(), NumberBase::kDec, result_text, sizeof(result_text));
@@ -419,6 +499,9 @@ void App::logResult(const char* expression_text) {
   }
 }
 
+/*
+ * 函数作用：构造主界面底部状态行。
+ */
 void App::buildStatusText(char* out_text, size_t length) const {
   const char* angle_text = angle_mode_ == AngleMode::kDeg ? "DEG" : "RAD";
   const char* base_text = "DEC";

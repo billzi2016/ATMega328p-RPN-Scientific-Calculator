@@ -48,7 +48,9 @@ class App {
   uint8_t input_length_ = 0;
   uint16_t step_counter_ = 0;
   char last_result_[kResultBufferSize] = {};
+  uint16_t history_session_index_ = 0;
   uint8_t history_view_offset_ = 0;
+  uint16_t file_browser_session_index_ = 0;
 
   /*
    * 函数作用：按当前页面状态分发按键事件。

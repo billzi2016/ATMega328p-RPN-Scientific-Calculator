@@ -50,12 +50,40 @@ class StorageSd {
   const char* sessionPath() const;
 
   /*
+   * 函数作用：返回当前可浏览的历史会话总数。
+   */
+  uint16_t availableSessionCount() const;
+
+  /*
+   * 函数作用：返回当前最新会话编号。
+   */
+  uint16_t latestSessionIndex() const;
+
+  /*
+   * 函数作用：返回当前已打开会话的编号，若尚未创建则返回 0。
+   */
+  uint16_t currentSessionIndex() const;
+
+  /*
    * 函数作用：从当前会话日志文件中读取最近的第 N 条记录。
    * 参数说明：
    * - offset=0 表示最新一条
    * - out_available_count 返回当前可浏览的最近记录条数
    */
   bool readRecentRecord(
+      uint8_t offset,
+      uint16_t* out_step,
+      char* out_expression,
+      size_t expression_length,
+      char* out_result,
+      size_t result_length,
+      uint8_t* out_available_count) const;
+
+  /*
+   * 函数作用：从指定会话文件中读取最近的第 N 条记录。
+   */
+  bool readRecentRecordFromSession(
+      uint16_t session_index,
       uint8_t offset,
       uint16_t* out_step,
       char* out_expression,
@@ -72,6 +100,15 @@ class StorageSd {
   HistoryManager history_manager_;
 
   bool openSessionFileIfNeeded();
+  bool readRecentRecordFromPath(
+      const char* path,
+      uint8_t offset,
+      uint16_t* out_step,
+      char* out_expression,
+      size_t expression_length,
+      char* out_result,
+      size_t result_length,
+      uint8_t* out_available_count) const;
 
   /*
    * 函数作用：把单行 STEP 日志解析为步号、表达式和结果。
