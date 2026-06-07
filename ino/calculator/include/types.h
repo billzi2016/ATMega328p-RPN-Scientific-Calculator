@@ -17,18 +17,28 @@ enum class AppScreen : uint8_t {
   kHome = 0,
   kMenu,
   kHistory,
-  kFileBrowser
+  kFileBrowser,
+  kStandby,
+  kMaintenance
 };
 
 enum class AngleMode : uint8_t {
   kDeg = 0,
-  kRad
+  kRad,
+  kGrad
 };
 
 enum class NumberBase : uint8_t {
   kDec = 0,
   kBin,
+  kOct,
   kHex
+};
+
+enum class WorkMode : uint8_t {
+  kScientific = 0,
+  kProgrammer,
+  kMaintenance
 };
 
 enum class ErrorCode : uint8_t {

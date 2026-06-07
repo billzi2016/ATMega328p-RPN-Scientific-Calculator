@@ -125,6 +125,21 @@ class CalculatorCore {
   bool trigTan(AngleMode angle_mode);
 
   /*
+   * 函数作用：按当前角度模式计算反三角函数。
+   */
+  bool arcSin(AngleMode angle_mode);
+  bool arcCos(AngleMode angle_mode);
+  bool arcTan(AngleMode angle_mode);
+
+  /*
+   * 函数作用：执行扩展一元科学函数。
+   */
+  bool absoluteValue();
+  bool cubeRoot();
+  bool decimalDegreesToDms();
+  bool dmsToDecimalDegrees();
+
+  /*
    * 函数作用：把数学常数压入栈顶。
    */
   bool pushPi();
@@ -136,9 +151,24 @@ class CalculatorCore {
   void store();
 
   /*
+   * 函数作用：把栈顶值存入指定编号的寄存器槽。
+   */
+  void storeSlot(uint8_t slot_index);
+
+  /*
+   * 函数作用：仅清空四级栈内容，不影响寄存器。
+   */
+  void clearStack();
+
+  /*
    * 函数作用：从 STO 寄存器回读并压栈。
    */
   bool recall();
+
+  /*
+   * 函数作用：从指定编号寄存器槽回读并压栈。
+   */
+  bool recallSlot(uint8_t slot_index);
 
   /*
    * 函数作用：读取 M 寄存器当前值。
@@ -190,7 +220,7 @@ class CalculatorCore {
 
  private:
   float stack_[kStackDepth];
-  float storage_register_ = 0.0f;
+  float storage_registers_[10] = {};
   float memory_register_ = 0.0f;
   ErrorCode last_error_ = ErrorCode::kNone;
 
@@ -198,6 +228,7 @@ class CalculatorCore {
   void shiftDownFrom(uint8_t index);
   bool requireFinite(float value);
   float radiansFromMode(float value, AngleMode angle_mode) const;
+  float angleFromRadians(float value, AngleMode angle_mode) const;
 };
 
 }  // namespace calculator

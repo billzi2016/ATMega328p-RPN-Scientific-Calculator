@@ -29,6 +29,9 @@ const uint8_t kKeyMap[kKeyboardRowCount][kKeyboardColumnCount] PROGMEM = {
 
 }  // namespace
 
+/*
+ * 函数作用：初始化 595/165 相关引脚方向与默认电平。
+ */
 void KeyboardMatrix::begin() {
   pinMode(kShift595Ser, OUTPUT);
   pinMode(kShift595Clock, OUTPUT);
@@ -45,6 +48,9 @@ void KeyboardMatrix::begin() {
   digitalWrite(kShift165Clock, LOW);
 }
 
+/*
+ * 函数作用：按固定扫描周期触发一次矩阵采样。
+ */
 void KeyboardMatrix::update() {
   const uint16_t now = static_cast<uint16_t>(millis());
   if (static_cast<uint16_t>(now - last_scan_ms_) < kKeyboardScanIntervalMs) {
@@ -55,6 +61,9 @@ void KeyboardMatrix::update() {
   scanMatrix();
 }
 
+/*
+ * 函数作用：取出一条已经完成去抖的按键事件。
+ */
 bool KeyboardMatrix::pollEvent(KeyEvent* event) {
   if (!has_pending_event_ || event == nullptr) {
     return false;
@@ -66,6 +75,9 @@ bool KeyboardMatrix::pollEvent(KeyEvent* event) {
   return true;
 }
 
+/*
+ * 函数作用：扫描全部 8 行并更新稳定按键状态。
+ */
 void KeyboardMatrix::scanMatrix() {
   const uint16_t now = static_cast<uint16_t>(millis());
 
@@ -105,6 +117,9 @@ void KeyboardMatrix::scanMatrix() {
   }
 }
 
+/*
+ * 函数作用：仅选通一行，供 74HC165 读取对应列状态。
+ */
 void KeyboardMatrix::driveSingleRow(uint8_t row_index) {
   uint8_t row_mask = 0xFF;
 
@@ -116,6 +131,9 @@ void KeyboardMatrix::driveSingleRow(uint8_t row_index) {
   digitalWrite(kShift595Latch, HIGH);
 }
 
+/*
+ * 函数作用：锁存并读取当前被选中行的 8 位列输入。
+ */
 uint8_t KeyboardMatrix::readColumns() const {
   digitalWrite(kShift165Load, LOW);
   delayMicroseconds(5);
@@ -124,6 +142,9 @@ uint8_t KeyboardMatrix::readColumns() const {
   return shiftIn(kShift165Data, kShift165Clock, LSBFIRST);
 }
 
+/*
+ * 函数作用：把行列坐标映射为逻辑键值。
+ */
 KeyCode KeyboardMatrix::mapKey(uint8_t row_index, uint8_t column_index) const {
   if (row_index >= kKeyboardRowCount || column_index >= kKeyboardColumnCount) {
     return KeyCode::kNone;
@@ -131,10 +152,16 @@ KeyCode KeyboardMatrix::mapKey(uint8_t row_index, uint8_t column_index) const {
   return static_cast<KeyCode>(pgm_read_byte(&kKeyMap[row_index][column_index]));
 }
 
+/*
+ * 函数作用：判断指定列在位图中是否处于按下状态。
+ */
 bool KeyboardMatrix::isPressed(uint8_t row_mask, uint8_t column_index) const {
   return (row_mask & static_cast<uint8_t>(1U << column_index)) != 0;
 }
 
+/*
+ * 函数作用：在行位图中写入某一列的按下/释放状态。
+ */
 void KeyboardMatrix::writePressedState(uint8_t* row_mask, uint8_t column_index, bool pressed) {
   if (row_mask == nullptr) {
     return;

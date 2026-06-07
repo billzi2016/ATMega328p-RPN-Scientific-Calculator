@@ -34,9 +34,16 @@ class App {
   void update();
 
  private:
+  enum class PendingRegisterAction : uint8_t {
+    kNone = 0,
+    kStore,
+    kRecall
+  };
+
   AppScreen screen_ = AppScreen::kHome;
   AngleMode angle_mode_ = AngleMode::kDeg;
   NumberBase number_base_ = NumberBase::kDec;
+  WorkMode work_mode_ = WorkMode::kScientific;
 
   CalculatorCore core_;
   KeyboardMatrix keyboard_;
@@ -51,6 +58,9 @@ class App {
   uint16_t history_session_index_ = 0;
   uint8_t history_view_offset_ = 0;
   uint16_t file_browser_session_index_ = 0;
+  bool shift_armed_ = false;
+  bool alpha_armed_ = false;
+  PendingRegisterAction pending_register_action_ = PendingRegisterAction::kNone;
 
   /*
    * 函数作用：按当前页面状态分发按键事件。
@@ -61,6 +71,16 @@ class App {
    * 函数作用：处理主计算界面的按键逻辑。
    */
   void handleHomeKey(KeyCode code);
+
+  /*
+   * 函数作用：处理一次性 SHIFT 副层按键逻辑。
+   */
+  bool handleShiftedHomeKey(KeyCode code);
+
+  /*
+   * 函数作用：处理一次性 ALPHA 副层按键逻辑。
+   */
+  bool handleAlphaHomeKey(KeyCode code);
 
   /*
    * 函数作用：根据当前页面状态刷新 LCD。
@@ -83,6 +103,16 @@ class App {
   void renderFileScreen();
 
   /*
+   * 函数作用：渲染待机界面。
+   */
+  void renderStandbyScreen();
+
+  /*
+   * 函数作用：渲染维护/自检界面。
+   */
+  void renderMaintenanceScreen();
+
+  /*
    * 函数作用：向当前输入缓冲区追加一个字符。
    */
   void appendInputChar(char ch);
@@ -96,6 +126,31 @@ class App {
    * 函数作用：若输入缓冲区非空，则把文本转换为数值并压栈。
    */
   bool commitInputIfNeeded();
+
+  /*
+   * 函数作用：按当前显示进制把输入缓冲区解析成数值。
+   */
+  bool parseInputValue(float* out_value) const;
+
+  /*
+   * 函数作用：在程序员输入场景下追加一个十六进制字符。
+   */
+  bool appendAlphaDigit(char ch);
+
+  /*
+   * 函数作用：清空副层状态，避免 SHIFT/ALPHA 残留到后续按键。
+   */
+  void clearModifierArms();
+
+  /*
+   * 函数作用：若当前存在待选寄存器动作，则消费数字键完成 STO/RCL。
+   */
+  bool handlePendingRegisterDigit(KeyCode code);
+
+  /*
+   * 函数作用：按顺序切换工作模式，并同步基础显示/输入策略。
+   */
+  void cycleWorkMode();
 
   /*
    * 函数作用：执行二元运算并在成功后记录历史。

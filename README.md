@@ -39,6 +39,11 @@
 - `74HC595 + 74HC165` 键盘扫描
 - `LCD2004` 主界面/菜单/历史/文件浏览界面
 - `TF / MicroSD` 会话日志写入、最近历史读取与跨会话历史浏览
+- `SHIFT` 一次性副层：`asin / acos / atan / 10^x / e^x / cbrt / abs / 2π / 清空输入 / 清空整栈 / OCT / GRAD / DMS / 多槽 STO/RCL`
+- `ALPHA` 一次性副层：在 `HEX` 输入场景下录入 `A-F`
+- `MODE` 工作模式切换：`Scientific / Programmer / Maintenance`
+- `ON/OFF` 软件待机与恢复
+- 历史界面结果回填、文件/历史括号导航
 - `Mega 2560` 目标板适配
 - `calculator_core` 自检 sketch
 
@@ -49,5 +54,5 @@
 
 仍需继续完成的工作：
 
-- 更多副层键位功能
 - 实板联调与长期稳定性验证
+- 更系统的自动化测试与整机联调验证

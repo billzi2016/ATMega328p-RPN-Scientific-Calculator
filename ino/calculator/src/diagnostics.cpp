@@ -10,10 +10,16 @@
 
 namespace calculator {
 
+/*
+ * 函数作用：初始化诊断模块。
+ */
 void Diagnostics::begin() {
   // 当前版本暂不启用串口调试，保留空实现作为后续扩展入口。
 }
 
+/*
+ * 函数作用：把错误码转换为 LCD 可显示的短文本。
+ */
 const char* Diagnostics::errorText(ErrorCode code) const {
   switch (code) {
     case ErrorCode::kNone:
